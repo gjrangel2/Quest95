@@ -1,52 +1,31 @@
 <?php
-// Iniciar la sesión de PHP al principio de cualquier script que la use.
 session_start();
+require_once 'config.php'; // Ahora $pdo es nuestra conexión PDO, NO $conn de MySQLi
 
-// Incluir el archivo de configuración de la base de datos.
-// Esto nos dará la variable $conn que es nuestra conexión a MySQL.
-require_once 'config.php';
-
-// Si el carrito no existe en la sesión, inicialízalo como un array vacío.
 if (!isset($_SESSION['cart'])) {
     $_SESSION['cart'] = [];
 }
 
-// --- Lógica para eliminar productos del carrito (si se añade un botón para ello) ---
-// Comprueba si se envió una solicitud POST y si el botón 'remove_from_cart' fue presionado.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_from_cart'])) {
-    // Obtiene la clave del ítem del carrito (id_talla) que se quiere eliminar.
-    $item_key_to_remove = $_POST['item_key']; // Ahora usamos la clave completa del ítem
+    $item_key_to_remove = $_POST['item_key'];
     
-    // Verifica si el ítem existe en el carrito antes de intentar eliminarlo.
     if (isset($_SESSION['cart'][$item_key_to_remove])) {
-        unset($_SESSION['cart'][$item_key_to_remove]); // Elimina el elemento del carrito.
+        unset($_SESSION['cart'][$item_key_to_remove]);
     }
-    // Redireccionar para evitar el reenvío del formulario al recargar la página (PRG pattern).
     header('Location: index.php');
-    exit(); // Termina la ejecución del script después de la redirección.
+    exit();
 }
 
-// --- Obtener productos de la base de datos ---
-// Define la consulta SQL para seleccionar todos los productos de la tabla 'products'.
-$sql = "SELECT id, name, price, image FROM products";
-// Ejecuta la consulta SQL en la base de datos usando la conexión $conn.
-$result = mysqli_query($conn, $sql);
-
-// Inicializa un array para almacenar los productos que se obtendrán de la base de datos.
-$products = [];
-// Comprueba si la consulta devolvió resultados y si hay filas.
-if (mysqli_num_rows($result) > 0) {
-    // Itera sobre cada fila de resultados y las almacena en el array $products.
-    // mysqli_fetch_assoc() recupera una fila de resultados como un array asociativo.
-    while ($row = mysqli_fetch_assoc($result)) {
-        $products[] = $row;
-    }
+// --- Obtener productos de la base de datos con PDO ---
+try {
+    // Aquí el cambio: Usamos $pdo->query() en lugar de mysqli_query()
+    $stmt = $pdo->query("SELECT id, name, price, image FROM products");
+    // Aquí el cambio: Usamos $stmt->fetchAll(PDO::FETCH_ASSOC) en lugar de mysqli_fetch_assoc() en un bucle
+    $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    die("Error al obtener productos: " . $e->getMessage());
 }
-// Libera la memoria asociada al resultado de la consulta.
-mysqli_free_result($result);
 
-// La conexión a la BD se cierra implícitamente al final del script si no se cierra manualmente.
-// mysqli_close($conn); // Puedes descomentar esto si quieres cerrarla explícitamente aquí.
 ?>
 
 <!DOCTYPE html>
@@ -59,7 +38,7 @@ mysqli_free_result($result);
     <link href="https://fonts.googleapis.com/css2?family=Staatliches&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
     <style>
-        /* Estilos adicionales para el resumen del carrito, si no están en styles.css */
+        /* (Tus estilos adicionales para el carrito, etc., aquí) */
         .cart-summary {
             background-color: #f8f9fa;
             border: 1px solid #dee2e6;
@@ -178,10 +157,7 @@ mysqli_free_result($result);
         <h1>NUESTROS PRODUCTOS</h1>
 
         <div class="grid">
-            <?php
-            // Bucle PHP para iterar sobre el array de productos obtenido de la base de datos.
-            foreach ($products as $product):
-            ?>
+            <?php foreach ($products as $product): ?>
                 <div class="producto">
                     <a href="producto.php?id=<?php echo htmlspecialchars($product['id']); ?>">
                         <img class="producto__imagen" src="<?php echo htmlspecialchars($product['image']); ?>" alt="imagen <?php echo htmlspecialchars($product['name']); ?>">
@@ -190,9 +166,11 @@ mysqli_free_result($result);
                             <p class="producto__precio">$<?php echo htmlspecialchars(number_format($product['price'], 2)); ?></p>
                         </div>
                     </a>
-                </div> <?php endforeach; // Cierra el bucle foreach. ?>
+                </div>
+            <?php endforeach; ?>
 
-            <div class="grafico grafico--camisas"></div> <div class="grafico grafico--node"></div>
+            <div class="grafico grafico--camisas"></div>
+            <div class="grafico grafico--node"></div>
         </div>
     </main>
 
@@ -200,16 +178,11 @@ mysqli_free_result($result);
         <h2>Carrito de Compras</h2>
         <?php
         $total_cart_price = 0;
-        // Verifica si el carrito tiene elementos.
         if (!empty($_SESSION['cart'])):
         ?>
             <ul class="cart-item-list">
-                <?php
-                // Itera sobre cada elemento en el array de sesión del carrito.
-                foreach ($_SESSION['cart'] as $item_key => $item):
-                    // Calcula el subtotal para el item actual.
+                <?php foreach ($_SESSION['cart'] as $item_key => $item):
                     $item_subtotal = $item['price'] * $item['quantity'];
-                    // Acumula al total general del carrito.
                     $total_cart_price += $item_subtotal;
                 ?>
                     <li class="cart-item">
@@ -239,7 +212,7 @@ mysqli_free_result($result);
     </div>
 
     <footer>
-        <p class="footer__texto"> Todos los derechos reservados 2025.</p>
+        <p class="footer__texto"> Front End Store - Todos los derechos reservados 2024.</p>
     </footer>
 
 </body>

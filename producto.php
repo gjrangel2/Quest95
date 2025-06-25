@@ -1,114 +1,77 @@
 <?php
-// Iniciar la sesión de PHP. Crucial para el carrito.
 session_start();
+require_once 'config.php'; // Ahora $pdo es nuestra conexión PDO
 
-// Incluir el archivo de configuración de la base de datos.
-require_once 'config.php';
-
-// Si el carrito no existe en la sesión, inicialízalo como un array vacío.
 if (!isset($_SESSION['cart'])) {
     $_SESSION['cart'] = [];
 }
 
-// Obtener el ID del producto de la URL (parámetro GET).
-// filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT) es una forma segura de obtener y validar un entero de la URL.
 $product_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
-
-// Variable para almacenar los detalles del producto que se mostrará en la página.
 $current_product = null;
 
-// Validar que se recibió un ID de producto válido.
 if ($product_id) {
-    // Preparar la consulta SQL para obtener un producto específico por su ID.
-    // Usamos una consulta preparada para prevenir inyecciones SQL.
-    $sql = "SELECT id, name, price, image, description, sizes FROM products WHERE id = ?";
-    // Prepara la declaración SQL. mysqli_prepare() devuelve un objeto de declaración.
-    $stmt = mysqli_prepare($conn, $sql);
+    try {
+        // Cambio: Usamos $pdo->prepare() y $stmt->bindParam()
+        $stmt = $pdo->prepare("SELECT id, name, price, image, description, sizes FROM products WHERE id = :id");
+        $stmt->bindParam(':id', $product_id, PDO::PARAM_INT);
+        $stmt->execute();
+        // Cambio: Usamos $stmt->fetch() para obtener una sola fila
+        $current_product = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    // Si la preparación de la declaración fue exitosa.
-    if ($stmt) {
-        // Enlaza el parámetro 'id' (el '?' en la consulta) con la variable $product_id.
-        // 'i' indica que el parámetro es un entero (integer).
-        mysqli_stmt_bind_param($stmt, "i", $product_id);
-        // Ejecuta la declaración preparada.
-        mysqli_stmt_execute($stmt);
-        // Obtiene el resultado de la ejecución.
-        $result = mysqli_stmt_get_result($stmt);
-
-        // Si se encontró el producto, recupera sus datos.
-        if (mysqli_num_rows($result) > 0) {
-            $current_product = mysqli_fetch_assoc($result);
-            // Convertir la cadena de tallas separada por comas en un array.
+        if ($current_product) {
             $current_product['sizes'] = explode(',', $current_product['sizes']);
         }
-        // Cierra la declaración.
-        mysqli_stmt_close($stmt);
+    } catch (PDOException $e) {
+        die("Error al obtener el producto: " . $e->getMessage());
     }
 }
 
-// Si el producto no se encuentra (ID no válido o no existe), redirige al index.
 if (!$current_product) {
     header('Location: index.php');
     exit();
 }
 
 // --- Lógica para agregar productos al carrito ---
-// Comprueba si la solicitud es POST (se envió el formulario) y si el botón 'add_to_cart' fue presionado.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_to_cart'])) {
-    // Obtener la cantidad, asegurándose de que sea un entero y al menos 1.
     $quantity = isset($_POST['quantity']) ? (int)$_POST['quantity'] : 1;
     if ($quantity < 1) { $quantity = 1; }
 
-    // Obtener la talla seleccionada.
     $size = isset($_POST['size']) ? htmlspecialchars($_POST['size']) : '';
 
-    // Validar que se seleccionó una talla si el producto tiene tallas definidas.
-    // Solo se valida si el array de tallas no está vacío y la talla seleccionada no es una de las válidas.
     if (!empty($current_product['sizes']) && !in_array($size, $current_product['sizes'])) {
-        // Podrías añadir un mensaje de error o ignorar la adición al carrito.
-        // echo "<p style='color: red;'>Por favor, seleccione una talla válida.</p>";
-        // No procesamos la adición al carrito si la talla no es válida.
+        // Mensaje de error o ignorar
     } else {
-        // La clave del carrito ahora incluye el ID del producto y la talla
-        // para diferenciar, por ejemplo, "Camiseta S" de "Camiseta M".
-        // htmlspecialchars() para $size_key previene XSS si el valor de la talla viniera de una fuente no confiable.
         $cart_item_key = $current_product['id'] . '_' . $size;
 
-        // Si el producto (con la talla específica) ya está en el carrito.
         if (isset($_SESSION['cart'][$cart_item_key])) {
-            // Incrementa la cantidad.
             $_SESSION['cart'][$cart_item_key]['quantity'] += $quantity;
         } else {
-            // Si es un nuevo artículo, añadirlo al carrito con todos sus detalles.
             $_SESSION['cart'][$cart_item_key] = [
-                'id' => $current_product['id'], // Guardar el ID original del producto
+                'id' => $current_product['id'],
                 'name' => $current_product['name'],
-                'price' => (float)$current_product['price'], // Asegurarse de que el precio sea flotante
+                'price' => (float)$current_product['price'],
                 'image' => $current_product['image'],
                 'quantity' => $quantity,
-                'size' => $size // Talla seleccionada por el usuario
+                'size' => $size
             ];
         }
 
-        // Redireccionar para evitar el reenvío del formulario (Post/Redirect/Get).
         header('Location: producto.php?id=' . $current_product['id']);
-        exit(); // Termina la ejecución del script.
+        exit();
     }
 }
 
 // --- Lógica para eliminar productos del carrito ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_from_cart'])) {
-    $item_key_to_remove = $_POST['item_key']; // Obtenemos la clave completa del ítem del carrito
+    $item_key_to_remove = $_POST['item_key'];
     
     if (isset($_SESSION['cart'][$item_key_to_remove])) {
         unset($_SESSION['cart'][$item_key_to_remove]);
     }
-    header('Location: producto.php?id=' . $current_product['id']); // Redirige a la misma página
+    header('Location: producto.php?id=' . $current_product['id']);
     exit();
 }
 
-// La conexión a la BD se cierra implícitamente al final del script.
-// mysqli_close($conn); // Puedes descomentar si quieres cerrar explícitamente.
 ?>
 
 <!DOCTYPE html>
@@ -121,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_from_cart'])) 
     <link href="https://fonts.googleapis.com/css2?family=Staatliches&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
      <style>
-        /* Estilos adicionales para el resumen del carrito, si no están en styles.css */
+        /* (Tus estilos adicionales para el carrito, etc., aquí) */
         .cart-summary {
             background-color: #f8f9fa;
             border: 1px solid #dee2e6;
@@ -251,17 +214,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_from_cart'])) 
                     <select class="formulario__campo" name="size" required>
                         <option disabled selected>--SELECCIONAR TALLA--</option>
                         <?php
-                        // Genera las opciones de talla dinámicamente si el producto tiene tallas definidas.
                         if (!empty($current_product['sizes'])) {
                             foreach ($current_product['sizes'] as $size):
-                                // htmlspecialchars() para escapar la talla al mostrarla.
-                                // trim() para eliminar espacios en blanco si los hubiera en los datos de la BD
                         ?>
                                 <option value="<?php echo htmlspecialchars(trim($size)); ?>"><?php echo htmlspecialchars(trim($size)); ?></option>
                         <?php
                             endforeach;
                         } else {
-                            // Si no hay tallas definidas (o la columna 'sizes' está vacía), podrías poner una opción por defecto o deshabilitar el select.
                             echo '<option value="">Sin Talla Aplicable</option>';
                         }
                         ?>
@@ -281,8 +240,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_from_cart'])) 
         if (!empty($_SESSION['cart'])):
         ?>
             <ul class="cart-item-list">
-                <?php
-                foreach ($_SESSION['cart'] as $item_key => $item):
+                <?php foreach ($_SESSION['cart'] as $item_key => $item):
                     $item_subtotal = $item['price'] * $item['quantity'];
                     $total_cart_price += $item_subtotal;
                 ?>

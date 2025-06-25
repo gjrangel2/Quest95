@@ -1,30 +1,51 @@
+
 <?php
-// Define las constantes para la conexión a la base de datos MySQL.
-// HOST: La dirección del servidor de la base de datos (generalmente 'localhost' si está en la misma máquina).
+// Define las constantes para la conexión a la base de datos PostgreSQL.
+// DB_HOST: La dirección del servidor de la base de datos (generalmente 'localhost').
 define('DB_HOST', 'localhost');
-// USER: El nombre de usuario para acceder a la base de datos (por defecto 'root' en XAMPP/WAMP).
-define('DB_USER', 'root');
-// PASS: La contraseña para el usuario de la base de datos (por defecto vacía en XAMPP/WAMP).
-define('DB_PASS', 'rangel1991');
-// NAME: El nombre de la base de datos que creamos.
+// DB_PORT: El puerto por defecto de PostgreSQL es 5432.
+define('DB_PORT', '5432');
+// DB_USER: El nombre de usuario para acceder a la base de datos.
+define('DB_USER', 'postgres'); // ¡CAMBIA ESTO!
+// DB_PASS: La contraseña para el usuario de la base de datos.
+define('DB_PASS', 'rangel1991'); // ¡CAMBIA ESTO!
+// DB_NAME: El nombre de la base de datos que creamos en PostgreSQL.
 define('DB_NAME', 'quest_tienda');
 
-// Intenta establecer una nueva conexión a la base de datos utilizando la extensión MySQLi.
-// mysqli_connect() toma los parámetros de host, usuario, contraseña y nombre de la base de datos.
-$conn = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+// Variable para almacenar la conexión PDO.
+$pdo = null;
 
-// Comprueba si la conexión a la base de datos fue exitosa.
-// mysqli_connect_errno() devuelve el código de error de la última llamada a mysqli_connect().
-// Si hay un error, el número de error será diferente de 0.
-if (mysqli_connect_errno()) {
+try {
+    // Cadena de conexión (DSN) para PostgreSQL usando PDO.
+    $dsn = "pgsql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME;
+
+    // Crea una nueva instancia de PDO.
+    // PDO es más flexible ya que permite usar el mismo código con diferentes bases de datos
+    // cambiando solo el DSN y el driver.
+    $pdo = new PDO($dsn, DB_USER, DB_PASS);
+
+    // Configura el modo de error de PDO para lanzar excepciones.
+    // Esto es muy útil para depuración y manejo de errores.
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Opcional: Establecer el conjunto de caracteres a UTF-8.
+    // Esto se puede hacer en el DSN o con una consulta.
+    $pdo->exec("SET NAMES 'UTF8'");
+    $pdo->exec("SET client_encoding TO 'UTF8'");
+
+    // Si la conexión es exitosa, puedes imprimir un mensaje (solo para depuración).
+    // echo "Conexión a PostgreSQL exitosa!";
+
+} catch (PDOException $e) {
     // Si la conexión falla, muestra un mensaje de error y termina la ejecución del script.
-    // mysqli_connect_error() devuelve una descripción del último error de conexión.
-    die("Fallo en la conexión a la base de datos: " . mysqli_connect_error());
+    // $e->getMessage() proporciona el mensaje de error de la excepción.
+    die("Fallo en la conexión a la base de datos PostgreSQL: " . $e->getMessage());
 }
 
-// Opcional: Establecer el conjunto de caracteres a UTF-8 para evitar problemas con tildes y caracteres especiales.
-mysqli_set_charset($conn, "utf8");
+// La variable $pdo (la conexión a la base de datos) estará disponible en cualquier
+// archivo que incluya 'config.php'.
 
-// Nota: Esta conexión estará disponible en cualquier archivo que incluya 'config.php'.
-// Es importante cerrar la conexión cuando ya no se necesite, aunque en scripts cortos PHP lo hace automáticamente al finalizar.
+// Nota: Con PDO, no necesitas cerrar explícitamente la conexión;
+// se cerrará automáticamente cuando el script termine.
 ?>
+
